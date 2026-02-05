@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="analytics">
+    <h1>Learning Analytics Dashboard</h1>
+    
+    <div class="info-box">
+        <p>Download CSV files for research analysis. Choose between named (with student identities) or anonymized (with stable student IDs) exports.</p>
+    </div>
+    
+    {% for class in classes %}
+        <div class="analytics-section">
+            <h2>{{ class.name }}</h2>
+            
+            <div class="class-analytics">
+                <h3>Class-Level Data</h3>
+                <div class="download-buttons">
+                    <a href="{{ url_for('download_class_csv', class_id=class.id, anonymize='false') }}" class="btn btn-primary">Download Class Summary (Named)</a>
+                    <a href="{{ url_for('download_class_csv', class_id=class.id, anonymize='true') }}" class="btn btn-secondary">Download Class Summary (Anonymized)</a>
+                </div>
+            </div>
+            
+            {% if class.quizzes %}
+                <h3>Quiz-Level Data</h3>
+                <div class="quiz-analytics-list">
+                    {% for quiz in class.quizzes %}
+                        <div class="quiz-analytics-item">
+                            <h4>{{ quiz.title }}</h4>
+                            <p>{{ quiz.attempts|length }} total attempt(s) | {{ quiz.questions|length }} question(s)</p>
+                            <div class="download-buttons">
+                                <a href="{{ url_for('download_quiz_csv', quiz_id=quiz.id, anonymize='false') }}" class="btn btn-small">Quiz Performance (Named)</a>
+                                <a href="{{ url_for('download_quiz_csv', quiz_id=quiz.id, anonymize='true') }}" class="btn btn-small">Quiz Performance (Anonymized)</a>
+                                <a href="{{ url_for('download_scratch_events_csv', quiz_id=quiz.id, anonymize='false') }}" class="btn btn-small">Scratch Events (Named)</a>
+                                <a href="{{ url_for('download_scratch_events_csv', quiz_id=quiz.id, anonymize='true') }}" class="btn btn-small">Scratch Events (Anonymized)</a>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+    
+    {% if not classes %}
+        <p class="empty-state">No classes created yet. Create a class and quiz to access analytics.</p>
+    {% endif %}
+</div>
+{% endblock %}

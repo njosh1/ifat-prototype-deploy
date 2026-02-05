@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Join Class{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1>Join a Class</h1>
+    
+    <form method="POST" class="standard-form">
+        <div class="form-group">
+            <label for="join_code">Class Join Code:</label>
+            <input type="text" id="join_code" name="join_code" required placeholder="Enter 6-character code" maxlength="6" style="text-transform: uppercase;">
+        </div>
+        
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Join Class</button>
+            <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    
+    <div class="info-box">
+        <p><strong>Note:</strong> You need a join code from your teacher to enroll in a class.</p>
+    </div>
+</div>
+{% endblock %}

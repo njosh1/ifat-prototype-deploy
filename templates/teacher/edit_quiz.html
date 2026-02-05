@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Quiz: {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="quiz-editor">
+    <h1>{{ quiz.title }}</h1>
+    <p class="join-code-display">Quiz Join Code: <strong>{{ quiz.join_code }}</strong></p>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('view_class', class_id=quiz.class_id) }}" class="btn btn-secondary">Back to Class</a>
+    </div>
+    
+    <h2>Add Question</h2>
+    <form method="POST" class="question-form">
+        <div class="form-group">
+            <label for="question_text">Question Text:</label>
+            <textarea id="question_text" name="question_text" rows="3" required></textarea>
+        </div>
+        
+        <div class="options-grid">
+            <div class="form-group">
+                <label for="option_a">Option A:</label>
+                <input type="text" id="option_a" name="option_a" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_b">Option B:</label>
+                <input type="text" id="option_b" name="option_b" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_c">Option C:</label>
+                <input type="text" id="option_c" name="option_c" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_d">Option D:</label>
+                <input type="text" id="option_d" name="option_d" required>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="correct_answer">Correct Answer:</label>
+            <select id="correct_answer" name="correct_answer" required>
+                <option value="">Select correct answer</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="explanation">Explanation (shown after correct answer):</label>
+            <textarea id="explanation" name="explanation" rows="3" required></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Add Question</button>
+    </form>
+    
+    <h2>Current Questions ({{ questions|length }})</h2>
+    
+    {% if questions %}
+        <div class="questions-list">
+            {% for question in questions %}
+                <div class="question-item">
+                    <div class="question-header">
+                        <h3>Question {{ loop.index }}</h3>
+                        <form method="POST" action="{{ url_for('delete_question', question_id=question.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this question?')">Delete</button>
+                        </form>
+                    </div>
+                    <p class="question-text">{{ question.question_text }}</p>
+                    <div class="question-options">
+                        <p><strong>A:</strong> {{ question.option_a }} {% if question.correct_answer == 'A' %}<span class="correct-mark">✓</span>{% endif %}</p>
+                        <p><strong>B:</strong> {{ question.option_b }} {% if question.correct_answer == 'B' %}<span class="correct-mark">✓</span>{% endif %}</p>
+                        <p><strong>C:</strong> {{ question.option_c }} {% if question.correct_answer == 'C' %}<span class="correct-mark">✓</span>{% endif %}</p>
+                        <p><strong>D:</strong> {{ question.option_d }} {% if question.correct_answer == 'D' %}<span class="correct-mark">✓</span>{% endif %}</p>
+                    </div>
+                    <p class="explanation"><strong>Explanation:</strong> {{ question.explanation }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No questions added yet. Use the form above to add your first question.</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}{{ class_obj.name }}{% endblock %}
+
+{% block content %}
+<div class="class-view">
+    <h1>{{ class_obj.name }}</h1>
+    <p class="join-code-display">Class Join Code: <strong>{{ class_obj.join_code }}</strong></p>
+    <p class="class-info">{{ class_obj.enrollments|length }} student(s) enrolled</p>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('create_quiz', class_id=class_obj.id) }}" class="btn btn-primary">Create New Quiz</a>
+        <a href="{{ url_for('teacher_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+    
+    <h2>Quizzes in This Class</h2>
+    
+    {% if quizzes %}
+        <div class="quiz-list">
+            {% for quiz in quizzes %}
+                <div class="quiz-card">
+                    <h3>{{ quiz.title }}</h3>
+                    <p class="join-code">Quiz Join Code: <strong>{{ quiz.join_code }}</strong></p>
+                    <p class="quiz-stats">{{ quiz.questions|length }} question(s) | {{ quiz.attempts|length }} attempt(s)</p>
+                    <a href="{{ url_for('edit_quiz', quiz_id=quiz.id) }}" class="btn btn-small">Edit Quiz</a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No quizzes created yet. Click "Create New Quiz" to add one.</p>
+    {% endif %}
+</div>
+{% endblock %}

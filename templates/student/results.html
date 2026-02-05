@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Results{% endblock %}
+
+{% block content %}
+<div class="results-view">
+    <h1>Quiz Results</h1>
+    
+    <div class="results-summary">
+        <h2>{{ quiz.title }}</h2>
+        <p>Attempt #{{ attempt.attempt_number }}</p>
+        <p>Completed: {{ attempt.completed_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        
+        <div class="score-display">
+            <h3>Your Score: {{ attempt.score }} / {{ max_score }} points</h3>
+            <p>Percentage: {{ "%.1f"|format((attempt.score / max_score * 100) if max_score > 0 else 0) }}%</p>
+        </div>
+    </div>
+    
+    <h2>Question Breakdown</h2>
+    
+    <div class="results-breakdown">
+        {% for question in questions %}
+            {% set q_attempt = attempt.question_attempts|selectattr('question_id', 'equalto', question.id)|first %}
+            <div class="result-card">
+                <div class="result-header">
+                    <h3>Question {{ loop.index }}</h3>
+                    <span class="points-earned">{{ q_attempt.points_earned if q_attempt else 0 }} / 4 points</span>
+                </div>
+                
+                <p class="question-text">{{ question.question_text }}</p>
+                
+                <div class="result-details">
+                    <p><strong>Correct Answer:</strong> {{ question.correct_answer }}</p>
+                    {% if q_attempt %}
+                        <p><strong>Attempts Before Correct:</strong> {{ q_attempt.attempts_before_correct }}</p>
+                        
+                        {% if q_attempt.scratch_events %}
+                            <p><strong>Your Scratch Order:</strong></p>
+                            <div class="scratch-sequence">
+                                {% for event in q_attempt.scratch_events|sort(attribute='scratch_order') %}
+                                    <span class="scratch-badge {{ 'correct' if event.is_correct else 'incorrect' }}">
+                                        {{ event.scratch_order }}. {{ event.scratched_option }}
+                                        {{ '✓' if event.is_correct else '✗' }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                
+                <div class="explanation-display">
+                    <strong>Explanation:</strong> {{ question.explanation }}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('join_quiz') }}" class="btn btn-primary">Take Again</a>
+        <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

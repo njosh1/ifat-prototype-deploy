@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Student Dashboard</h1>
+    <p class="welcome">Welcome, {{ user.name }}!</p>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('join_class') }}" class="btn btn-primary">Join a Class</a>
+        <a href="{{ url_for('join_quiz') }}" class="btn btn-secondary">Take a Quiz</a>
+    </div>
+    
+    <h2>Your Classes</h2>
+    
+    {% if enrollments %}
+        <div class="class-grid">
+            {% for enrollment in enrollments %}
+                <div class="class-card">
+                    <h3>{{ enrollment.class_obj.name }}</h3>
+                    <p class="class-info">Teacher: {{ enrollment.class_obj.teacher.name }}</p>
+                    <p class="class-stats">{{ enrollment.class_obj.quizzes|length }} quiz(es) available</p>
+                    
+                    {% if enrollment.class_obj.quizzes %}
+                        <div class="quiz-list-compact">
+                            <h4>Available Quizzes:</h4>
+                            {% for quiz in enrollment.class_obj.quizzes %}
+                                <div class="quiz-item-compact">
+                                    <span>{{ quiz.title }}</span>
+                                    {% set attempt_count = quiz.attempts|selectattr('student_id', 'equalto', user.id)|list|length %}
+                                    <span class="attempts-badge">{{ attempt_count }} attempt(s)</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">You haven't joined any classes yet. Click "Join a Class" to get started.</p>
+    {% endif %}
+    
+    <h2>Recent Quiz Attempts</h2>
+    {% set recent_attempts = user.quiz_attempts|sort(attribute='started_at', reverse=True) %}
+    {% if recent_attempts %}
+        <div class="attempts-list">
+            {% for attempt in recent_attempts[:5] %}
+                <div class="attempt-card">
+                    <h3>{{ attempt.quiz.title }}</h3>
+                    <p>Class: {{ attempt.quiz.class_obj.name }}</p>
+                    <p>Attempt #{{ attempt.attempt_number }}</p>
+                    <p>Score: {{ attempt.score }} / {{ attempt.quiz.questions|length * 4 }} points</p>
+                    <p>Date: {{ attempt.started_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                    {% if attempt.completed_at %}
+                        <a href="{{ url_for('view_results', attempt_id=attempt.id) }}" class="btn btn-small">View Results</a>
+                    {% else %}
+                        <a href="{{ url_for('take_quiz', attempt_id=attempt.id) }}" class="btn btn-small">Continue</a>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No quiz attempts yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

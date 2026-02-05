@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Home - IF-AT Research Prototype{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>IF-AT Research Prototype</h1>
+    <p class="subtitle">Digital Immediate Feedback Assessment Technique for Physics Education Research</p>
+    
+    <div class="button-group">
+        <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+        <a href="{{ url_for('register') }}" class="btn btn-secondary">Register</a>
+    </div>
+    
+    <div class="info-section">
+        <h2>About This System</h2>
+        <p>This prototype replicates the physical IF-AT scratch card experience for online learning. 
+        Teachers can create classes and quizzes, while students scratch to reveal answers and receive 
+        immediate feedback.</p>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>For Teachers</h3>
+                <p>Create classes with join codes, build quizzes with detailed explanations, and 
+                access comprehensive learning analytics.</p>
+            </div>
+            <div class="feature-card">
+                <h3>For Students</h3>
+                <p>Join classes, take quizzes multiple times, and learn from immediate feedback 
+                with each scratch attempt.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Research Data</h3>
+                <p>Detailed tracking of scratch events, timing data, and performance metrics 
+                for learning analytics research.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

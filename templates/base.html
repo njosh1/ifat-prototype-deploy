@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}IF-AT Research Prototype{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">IF-AT Prototype</a>
+            <div class="nav-links">
+                {% if session.user_id %}
+                    {% if session.is_teacher %}
+                        <a href="{{ url_for('teacher_dashboard') }}">Dashboard</a>
+                        <a href="{{ url_for('analytics_dashboard') }}">Analytics</a>
+                    {% else %}
+                        <a href="{{ url_for('student_dashboard') }}">Dashboard</a>
+                        <a href="{{ url_for('join_class') }}">Join Class</a>
+                        <a href="{{ url_for('join_quiz') }}">Take Quiz</a>
+                    {% endif %}
+                    <a href="{{ url_for('logout') }}">Logout</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}">Login</a>
+                    <a href="{{ url_for('register') }}">Register</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for message in messages %}
+                        <div class="flash-message">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>IF-AT Research Prototype | For educational research use</p>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

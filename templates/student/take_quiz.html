@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Taking Quiz: {{ quiz.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.scratch-card {
+    display: inline-block;
+    position: relative;
+    width: 40px;
+    height: 40px;
+    margin: 5px;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.scratch-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #999 0%, #666 100%);
+    border: 2px solid #333;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.scratch-overlay:hover {
+    background: linear-gradient(135deg, #aaa 0%, #777 100%);
+    transform: scale(1.05);
+}
+
+.scratch-revealed {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    border: 2px solid;
+    border-radius: 50%;
+}
+
+.scratch-correct {
+    background-color: #d4edda;
+    border-color: #28a745;
+    color: #28a745;
+}
+
+.scratch-incorrect {
+    background-color: #f8d7da;
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.option-text {
+    flex: 1;
+    font-size: 16px;
+}
+
+.question-card {
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.question-card.completed {
+    border-color: #28a745;
+    background-color: #f0f9f4;
+}
+
+.question-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.points-display {
+    font-weight: bold;
+    font-size: 18px;
+    color: #007bff;
+}
+
+.explanation-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+    display: none;
+}
+
+.explanation-box.show {
+    display: block;
+}
+
+.quiz-header {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.instructions {
+    background: #e7f3ff;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="quiz-taking">
+    <div class="quiz-header">
+        <h1>{{ quiz.title }}</h1>
+        <p>Attempt #{{ attempt.attempt_number }}</p>
+        <p class="quiz-info">{{ questions|length }} questions | 4 points per question</p>
+    </div>
+    
+    <div class="instructions">
+        <h3>Instructions:</h3>
+        <p>Each question starts with 4 points. Click on the gray circles to "scratch" and reveal answers. Each wrong scratch costs 1 point. When you find the correct answer, you'll see an explanation.</p>
+    </div>
+    
+    <div id="quiz-container">
+        {% for question in questions %}
+            <div class="question-card" id="question-{{ question.id }}" data-question-id="{{ question.id }}">
+                <div class="question-header">
+                    <h3>Question {{ loop.index }}</h3>
+                    <span class="points-display" id="points-{{ question.id }}">4 points</span>
+                </div>
+                
+                <p class="question-text">{{ question.question_text }}</p>
+                
+                <div class="options-container">
+                    {% for option_letter in ['A', 'B', 'C', 'D'] %}
+                        <div class="option-row" id="option-row-{{ question.id }}-{{ option_letter }}">
+                            <div class="scratch-card" data-question="{{ question.id }}" data-option="{{ option_letter }}">
+                                <div class="scratch-overlay" id="scratch-{{ question.id }}-{{ option_letter }}">
+                                    ?
+                                </div>
+                            </div>
+                            <div class="option-text">
+                                {% if option_letter == 'A' %}
+                                    {{ question.option_a }}
+                                {% elif option_letter == 'B' %}
+                                    {{ question.option_b }}
+                                {% elif option_letter == 'C' %}
+                                    {{ question.option_c }}
+                                {% elif option_letter == 'D' %}
+                                    {{ question.option_d }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="explanation-box" id="explanation-{{ question.id }}">
+                    <strong>Explanation:</strong> {{ question.explanation }}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="quiz-complete-message" id="quiz-complete" style="display: none;">
+        <div class="alert alert-success">
+            <h2>Quiz Complete!</h2>
+            <p>All questions have been answered. Your results have been saved.</p>
+            <a href="{{ url_for('view_results', attempt_id=attempt.id) }}" class="btn btn-primary">View Results</a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const attemptId = {{ attempt.id }};
+const questionStates = {};
+
+// Initialize question states
+document.querySelectorAll('.question-card').forEach(card => {
+    const questionId = card.dataset.questionId;
+    questionStates[questionId] = {
+        scratches: 0,
+        pointsRemaining: 4,
+        completed: false
+    };
+});
+
+// Handle scratch clicks
+document.querySelectorAll('.scratch-card').forEach(card => {
+    card.addEventListener('click', async function() {
+        if (this.classList.contains('scratched')) {
+            return; // Already scratched
+        }
+        
+        const questionId = this.dataset.question;
+        const option = this.dataset.option;
+        
+        if (questionStates[questionId].completed) {
+            return; // Question already complete
+        }
+        
+        try {
+            const response = await fetch('/api/scratch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    attempt_id: attemptId,
+                    question_id: parseInt(questionId),
+                    option: option
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                alert(data.error || 'Error processing scratch');
+                return;
+            }
+            
+            // Mark as scratched
+            this.classList.add('scratched');
+            const overlay = this.querySelector('.scratch-overlay');
+            overlay.style.display = 'none';
+            
+            // Show result
+            const revealed = document.createElement('div');
+            revealed.className = 'scratch-revealed ' + (data.is_correct ? 'scratch-correct' : 'scratch-incorrect');
+            revealed.textContent = data.is_correct ? '✓' : '✗';
+            this.appendChild(revealed);
+            
+            // Update points
+            questionStates[questionId].scratches++;
+            if (!data.is_correct) {
+                questionStates[questionId].pointsRemaining--;
+            }
+            
+            document.getElementById('points-' + questionId).textContent = 
+                questionStates[questionId].pointsRemaining + ' points';
+            
+            if (data.is_correct) {
+                // Question complete
+                questionStates[questionId].completed = true;
+                const questionCard = document.getElementById('question-' + questionId);
+                questionCard.classList.add('completed');
+                
+                // Show explanation
+                document.getElementById('explanation-' + questionId).classList.add('show');
+                
+                // Disable other scratches for this question
+                document.querySelectorAll(`.scratch-card[data-question="${questionId}"]`).forEach(c => {
+                    c.style.cursor = 'not-allowed';
+                });
+            }
+            
+            // Check if quiz is complete
+            if (data.quiz_complete) {
+                document.getElementById('quiz-complete').style.display = 'block';
+                window.scrollTo(0, document.body.scrollHeight);
+            }
+            
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        }
+    });
+});
+</script>
+{% endblock %}
