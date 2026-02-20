@@ -11,6 +11,31 @@
             <label for="title">Quiz Title:</label>
             <input type="text" id="title" name="title" required placeholder="e.g., Chapter 5: Forces and Motion">
         </div>
+
+        <div class="form-group">
+            <label for="max_attempts">Maximum Attempts Per Student (optional):</label>
+            <input type="number" id="max_attempts" name="max_attempts" min="1" placeholder="Leave blank for unlimited">
+        </div>
+
+        <h3>Scoring by Scratch Attempt</h3>
+        <div class="options-grid">
+            <div class="form-group">
+                <label for="points_first_try">1st Scratch (Correct):</label>
+                <input type="number" id="points_first_try" name="points_first_try" min="0" value="4" required>
+            </div>
+            <div class="form-group">
+                <label for="points_second_try">2nd Scratch (Correct):</label>
+                <input type="number" id="points_second_try" name="points_second_try" min="0" value="3" required>
+            </div>
+            <div class="form-group">
+                <label for="points_third_try">3rd Scratch (Correct):</label>
+                <input type="number" id="points_third_try" name="points_third_try" min="0" value="2" required>
+            </div>
+            <div class="form-group">
+                <label for="points_fourth_try">4th Scratch (Correct):</label>
+                <input type="number" id="points_fourth_try" name="points_fourth_try" min="0" value="1" required>
+            </div>
+        </div>
         
         <div class="button-group">
             <button type="submit" class="btn btn-primary">Create Quiz</button>
@@ -20,6 +45,7 @@
     
     <div class="info-box">
         <p><strong>Note:</strong> After creating the quiz, you'll be able to add questions. A unique join code will be generated automatically.</p>
+        <p><strong>Examples:</strong> Use 3-2-1-0 or 4-2-1-0 by setting the four scoring fields above.</p>
     </div>
 </div>
 {% endblock %}

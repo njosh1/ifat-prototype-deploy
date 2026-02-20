@@ -6,10 +6,79 @@
 <div class="quiz-editor">
     <h1>{{ quiz.title }}</h1>
     <p class="join-code-display">Quiz Join Code: <strong>{{ quiz.join_code }}</strong></p>
+    <p class="quiz-stats">
+        Attempts: {{ quiz.max_attempts if quiz.max_attempts is not none else 'Unlimited' }} |
+        Scoring: {{ quiz.points_first_try }}-{{ quiz.points_second_try }}-{{ quiz.points_third_try }}-{{ quiz.points_fourth_try }}
+    </p>
     
     <div class="action-buttons">
         <a href="{{ url_for('view_class', class_id=quiz.class_id) }}" class="btn btn-secondary">Back to Class</a>
     </div>
+
+    <h2>Quiz Settings</h2>
+    <form method="POST" action="{{ url_for('update_quiz_settings', quiz_id=quiz.id) }}" class="question-form">
+        <div class="form-group">
+            <label for="max_attempts">Maximum Attempts Per Student (optional):</label>
+            <input type="number" id="max_attempts" name="max_attempts" min="1" value="{{ quiz.max_attempts if quiz.max_attempts is not none else '' }}" placeholder="Leave blank for unlimited">
+        </div>
+        <div class="options-grid">
+            <div class="form-group">
+                <label for="points_first_try">1st Scratch (Correct):</label>
+                <input type="number" id="points_first_try" name="points_first_try" min="0" value="{{ quiz.points_first_try }}" required>
+            </div>
+            <div class="form-group">
+                <label for="points_second_try">2nd Scratch (Correct):</label>
+                <input type="number" id="points_second_try" name="points_second_try" min="0" value="{{ quiz.points_second_try }}" required>
+            </div>
+            <div class="form-group">
+                <label for="points_third_try">3rd Scratch (Correct):</label>
+                <input type="number" id="points_third_try" name="points_third_try" min="0" value="{{ quiz.points_third_try }}" required>
+            </div>
+            <div class="form-group">
+                <label for="points_fourth_try">4th Scratch (Correct):</label>
+                <input type="number" id="points_fourth_try" name="points_fourth_try" min="0" value="{{ quiz.points_fourth_try }}" required>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+    </form>
+
+    {% if teacher_classes|length > 1 %}
+        <h2>Copy This Quiz</h2>
+        <form method="POST" action="{{ url_for('copy_quiz', quiz_id=quiz.id) }}" class="question-form">
+            <div class="form-group">
+                <label for="target_class_id">Target Class:</label>
+                <select id="target_class_id" name="target_class_id" required>
+                    {% for class_obj in teacher_classes %}
+                        {% if class_obj.id != quiz.class_id %}
+                            <option value="{{ class_obj.id }}">{{ class_obj.name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="title_suffix">Optional Title Suffix:</label>
+                <input type="text" id="title_suffix" name="title_suffix" placeholder="e.g., (Spring 2026)">
+            </div>
+            <button type="submit" class="btn btn-secondary">Copy Quiz to Class</button>
+        </form>
+    {% endif %}
+
+    {% if source_questions %}
+        <h2>Copy Question from Another Quiz</h2>
+        <form method="POST" action="{{ url_for('copy_question_into_quiz', quiz_id=quiz.id) }}" class="question-form">
+            <div class="form-group">
+                <label for="source_question_id">Source Question:</label>
+                <select id="source_question_id" name="source_question_id" required>
+                    {% for source_question in source_questions %}
+                        <option value="{{ source_question.id }}">
+                            {{ source_question.quiz.title }} - Q{{ source_question.order_num + 1 }}: {{ source_question.question_text[:70] }}{% if source_question.question_text|length > 70 %}...{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">Copy Question</button>
+        </form>
+    {% endif %}
     
     <h2>Add Question</h2>
     <form method="POST" class="question-form">
@@ -67,9 +136,19 @@
                 <div class="question-item">
                     <div class="question-header">
                         <h3>Question {{ loop.index }}</h3>
-                        <form method="POST" action="{{ url_for('delete_question', question_id=question.id) }}" style="display: inline;">
-                            <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this question?')">Delete</button>
-                        </form>
+                        <div class="button-group">
+                            <form method="POST" action="{{ url_for('move_question', question_id=question.id) }}" style="display: inline;">
+                                <input type="hidden" name="direction" value="up">
+                                <button type="submit" class="btn btn-secondary btn-small">Move Up</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('move_question', question_id=question.id) }}" style="display: inline;">
+                                <input type="hidden" name="direction" value="down">
+                                <button type="submit" class="btn btn-secondary btn-small">Move Down</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_question', question_id=question.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Delete this question?')">Delete</button>
+                            </form>
+                        </div>
                     </div>
                     <p class="question-text">{{ question.question_text }}</p>
                     <div class="question-options">

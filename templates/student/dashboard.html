@@ -28,9 +28,29 @@
                             {% for quiz in enrollment.class_obj.quizzes %}
                                 <div class="quiz-item-compact">
                                     <span>{{ quiz.title }}</span>
-                                    {% set attempt_count = quiz.attempts|selectattr('student_id', 'equalto', user.id)|list|length %}
+                                    {% set attempt_count = attempt_counts.get(quiz.id, 0) %}
                                     <span class="attempts-badge">{{ attempt_count }} attempt(s)</span>
                                 </div>
+                                <div class="button-group">
+                                    {% if quiz.id in in_progress_attempt_ids %}
+                                        <a href="{{ url_for('take_quiz', attempt_id=latest_incomplete_attempt_by_quiz[quiz.id].id) }}" class="btn btn-small">Continue In-Progress</a>
+                                    {% endif %}
+                                    {% if quiz.max_attempts is none or attempt_count < quiz.max_attempts %}
+                                        <form method="POST" action="{{ url_for('start_quiz', quiz_id=quiz.id) }}">
+                                            <button type="submit" class="btn btn-small btn-primary">
+                                                {% if quiz.id in in_progress_attempt_ids %}Start New Attempt{% else %}Take Quiz{% endif %}
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="empty-state">Attempt limit reached</span>
+                                    {% endif %}
+                                </div>
+                                <p class="quiz-stats">
+                                    Scoring: {{ quiz.points_first_try }}-{{ quiz.points_second_try }}-{{ quiz.points_third_try }}-{{ quiz.points_fourth_try }}
+                                    {% if best_scores.get(quiz.id) is not none %}
+                                        | Best: {{ best_scores.get(quiz.id) }} / {{ quiz.questions|length * quiz.max_points_per_question }}
+                                    {% endif %}
+                                </p>
                             {% endfor %}
                         </div>
                     {% endif %}
@@ -50,7 +70,7 @@
                     <h3>{{ attempt.quiz.title }}</h3>
                     <p>Class: {{ attempt.quiz.class_obj.name }}</p>
                     <p>Attempt #{{ attempt.attempt_number }}</p>
-                    <p>Score: {{ attempt.score }} / {{ attempt.quiz.questions|length * 4 }} points</p>
+                    <p>Score: {{ attempt.score }} / {{ attempt.quiz.questions|length * attempt.quiz.max_points_per_question }} points</p>
                     <p>Date: {{ attempt.started_at.strftime('%Y-%m-%d %H:%M') }}</p>
                     {% if attempt.completed_at %}
                         <a href="{{ url_for('view_results', attempt_id=attempt.id) }}" class="btn btn-small">View Results</a>

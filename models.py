@@ -46,11 +46,33 @@ class Quiz(db.Model):
     title = db.Column(db.String(200), nullable=False)
     join_code = db.Column(db.String(6), unique=True, nullable=False)
     class_id = db.Column(db.Integer, db.ForeignKey('classes.id'), nullable=False)
+    max_attempts = db.Column(db.Integer, nullable=True)  # NULL means unlimited
+    points_first_try = db.Column(db.Integer, default=4, nullable=False)
+    points_second_try = db.Column(db.Integer, default=3, nullable=False)
+    points_third_try = db.Column(db.Integer, default=2, nullable=False)
+    points_fourth_try = db.Column(db.Integer, default=1, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     questions = db.relationship('Question', backref='quiz', lazy=True, cascade='all, delete-orphan')
     attempts = db.relationship('QuizAttempt', backref='quiz', lazy=True)
+
+    @property
+    def scoring_scheme(self):
+        first = self.points_first_try if self.points_first_try is not None else 4
+        second = self.points_second_try if self.points_second_try is not None else 3
+        third = self.points_third_try if self.points_third_try is not None else 2
+        fourth = self.points_fourth_try if self.points_fourth_try is not None else 1
+        return [
+            first,
+            second,
+            third,
+            fourth,
+        ]
+
+    @property
+    def max_points_per_question(self):
+        return self.points_first_try if self.points_first_try is not None else 4
 
 class Question(db.Model):
     __tablename__ = 'questions'

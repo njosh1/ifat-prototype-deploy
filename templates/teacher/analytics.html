@@ -19,6 +19,8 @@
                 <div class="download-buttons">
                     <a href="{{ url_for('download_class_csv', class_id=class.id, anonymize='false') }}" class="btn btn-primary">Download Class Summary (Named)</a>
                     <a href="{{ url_for('download_class_csv', class_id=class.id, anonymize='true') }}" class="btn btn-secondary">Download Class Summary (Anonymized)</a>
+                    <a href="{{ url_for('download_class_scratch_events_csv', class_id=class.id, anonymize='false') }}" class="btn btn-small">Class Scratch Events (Named)</a>
+                    <a href="{{ url_for('download_class_scratch_events_csv', class_id=class.id, anonymize='true') }}" class="btn btn-small">Class Scratch Events (Anonymized)</a>
                 </div>
             </div>
             

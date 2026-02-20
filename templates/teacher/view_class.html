@@ -21,13 +21,33 @@
                 <div class="quiz-card">
                     <h3>{{ quiz.title }}</h3>
                     <p class="join-code">Quiz Join Code: <strong>{{ quiz.join_code }}</strong></p>
-                    <p class="quiz-stats">{{ quiz.questions|length }} question(s) | {{ quiz.attempts|length }} attempt(s)</p>
+                    <p class="quiz-stats">
+                        {{ quiz.questions|length }} question(s) | {{ quiz.attempts|length }} attempt(s) |
+                        Max attempts: {{ quiz.max_attempts if quiz.max_attempts is not none else 'Unlimited' }}
+                    </p>
+                    <p class="quiz-stats">Scoring: {{ quiz.points_first_try }}-{{ quiz.points_second_try }}-{{ quiz.points_third_try }}-{{ quiz.points_fourth_try }}</p>
                     <a href="{{ url_for('edit_quiz', quiz_id=quiz.id) }}" class="btn btn-small">Edit Quiz</a>
                 </div>
             {% endfor %}
         </div>
     {% else %}
         <p class="empty-state">No quizzes created yet. Click "Create New Quiz" to add one.</p>
+    {% endif %}
+
+    <h2>Enrolled Students</h2>
+    {% if students %}
+        <div class="questions-list">
+            {% for student in students %}
+                <div class="question-item">
+                    <div class="question-header">
+                        <h3>{{ student.name }}</h3>
+                    </div>
+                    <p>{{ student.email }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty-state">No students enrolled yet.</p>
     {% endif %}
 </div>
 {% endblock %}

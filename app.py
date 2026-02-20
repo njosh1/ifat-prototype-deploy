@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.security import generate_password_hash, check_password_hash
 import csv
 from io import StringIO, BytesIO
+from sqlalchemy import inspect, text
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -21,12 +22,88 @@ from models import db, User, Class, Quiz, Question, QuizAttempt, QuestionAttempt
 
 # Initialize db with app
 db.init_app(app)
+_schema_checked = False
 
 # ==================== UTILITIES ====================
 
 def generate_code(length=6):
     """Generate random alphanumeric code"""
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(length))
+
+def ensure_schema_updates():
+    """Best-effort schema patching for environments without migrations."""
+    inspector = inspect(db.engine)
+    quiz_columns = {col['name'] for col in inspector.get_columns('quizzes')}
+    updates = []
+
+    if 'max_attempts' not in quiz_columns:
+        updates.append("ALTER TABLE quizzes ADD COLUMN max_attempts INTEGER")
+    if 'points_first_try' not in quiz_columns:
+        updates.append("ALTER TABLE quizzes ADD COLUMN points_first_try INTEGER NOT NULL DEFAULT 4")
+    if 'points_second_try' not in quiz_columns:
+        updates.append("ALTER TABLE quizzes ADD COLUMN points_second_try INTEGER NOT NULL DEFAULT 3")
+    if 'points_third_try' not in quiz_columns:
+        updates.append("ALTER TABLE quizzes ADD COLUMN points_third_try INTEGER NOT NULL DEFAULT 2")
+    if 'points_fourth_try' not in quiz_columns:
+        updates.append("ALTER TABLE quizzes ADD COLUMN points_fourth_try INTEGER NOT NULL DEFAULT 1")
+
+    for stmt in updates:
+        db.session.execute(text(stmt))
+    if updates:
+        db.session.commit()
+
+def parse_scoring_scheme(form_data):
+    """Parse points for attempts 1-4 from form data."""
+    defaults = [4, 3, 2, 1]
+    values = []
+    keys = ['points_first_try', 'points_second_try', 'points_third_try', 'points_fourth_try']
+    for idx, key in enumerate(keys):
+        raw = (form_data.get(key, '') or '').strip()
+        if not raw:
+            values.append(defaults[idx])
+            continue
+        try:
+            parsed = int(raw)
+        except ValueError:
+            raise ValueError('Scoring values must be whole numbers.')
+        if parsed < 0:
+            raise ValueError('Scoring values cannot be negative.')
+        values.append(parsed)
+    return values
+
+def create_quiz_attempt(quiz, student_id):
+    """Create a new attempt after validating enrollment and attempt policy."""
+    enrollment = Enrollment.query.filter_by(student_id=student_id, class_id=quiz.class_id).first()
+    if not enrollment:
+        return None, 'You must be enrolled in this class to access this quiz.'
+
+    attempt_count = QuizAttempt.query.filter_by(quiz_id=quiz.id, student_id=student_id).count()
+    if quiz.max_attempts is not None and attempt_count >= quiz.max_attempts:
+        return None, f'Maximum attempts reached ({quiz.max_attempts}).'
+
+    new_attempt = QuizAttempt(
+        quiz_id=quiz.id,
+        student_id=student_id,
+        attempt_number=attempt_count + 1,
+        started_at=datetime.now(timezone.utc)
+    )
+    db.session.add(new_attempt)
+    db.session.commit()
+    return new_attempt, None
+
+def normalize_question_order(quiz_id):
+    ordered = Question.query.filter_by(quiz_id=quiz_id).order_by(Question.order_num, Question.id).all()
+    for index, question in enumerate(ordered):
+        question.order_num = index
+
+@app.before_request
+def ensure_schema_ready():
+    global _schema_checked
+    if _schema_checked:
+        return
+    db.create_all()
+    ensure_schema_updates()
+    _schema_checked = True
 
 def login_required(f):
     @wraps(f)
@@ -160,7 +237,13 @@ def view_class(class_id):
         return redirect(url_for('teacher_dashboard'))
     
     quizzes = Quiz.query.filter_by(class_id=class_id).all()
-    return render_template('teacher/view_class.html', class_obj=class_obj, quizzes=quizzes)
+    students = [enrollment.student for enrollment in class_obj.enrollments]
+    return render_template(
+        'teacher/view_class.html',
+        class_obj=class_obj,
+        quizzes=quizzes,
+        students=students
+    )
 
 @app.route('/teacher/class/<int:class_id>/quiz/create', methods=['GET', 'POST'])
 @teacher_required
@@ -172,9 +255,26 @@ def create_quiz(class_id):
     
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
+        max_attempts_raw = request.form.get('max_attempts', '').strip()
         if not title:
             flash('Quiz title is required.')
             return redirect(url_for('create_quiz', class_id=class_id))
+        try:
+            points_first, points_second, points_third, points_fourth = parse_scoring_scheme(request.form)
+        except ValueError as exc:
+            flash(str(exc))
+            return redirect(url_for('create_quiz', class_id=class_id))
+
+        max_attempts = None
+        if max_attempts_raw:
+            try:
+                max_attempts = int(max_attempts_raw)
+            except ValueError:
+                flash('Maximum attempts must be a whole number.')
+                return redirect(url_for('create_quiz', class_id=class_id))
+            if max_attempts < 1:
+                flash('Maximum attempts must be at least 1.')
+                return redirect(url_for('create_quiz', class_id=class_id))
         
         join_code = generate_code(6)
         while Quiz.query.filter_by(join_code=join_code).first():
@@ -183,7 +283,12 @@ def create_quiz(class_id):
         quiz = Quiz(
             title=title,
             join_code=join_code,
-            class_id=class_id
+            class_id=class_id,
+            max_attempts=max_attempts,
+            points_first_try=points_first,
+            points_second_try=points_second,
+            points_third_try=points_third,
+            points_fourth_try=points_fourth
         )
         db.session.add(quiz)
         db.session.commit()
@@ -237,7 +342,22 @@ def edit_quiz(quiz_id):
         return redirect(url_for('edit_quiz', quiz_id=quiz_id))
     
     questions = Question.query.filter_by(quiz_id=quiz_id).order_by(Question.order_num).all()
-    return render_template('teacher/edit_quiz.html', quiz=quiz, questions=questions)
+    source_quizzes = Quiz.query.join(Class).filter(
+        Class.teacher_id == session['user_id'],
+        Quiz.id != quiz.id
+    ).order_by(Quiz.title).all()
+    source_questions = Question.query.filter(
+        Question.quiz_id.in_([q.id for q in source_quizzes])
+    ).order_by(Question.quiz_id, Question.order_num).all() if source_quizzes else []
+    teacher_classes = Class.query.filter_by(teacher_id=session['user_id']).order_by(Class.name).all()
+    return render_template(
+        'teacher/edit_quiz.html',
+        quiz=quiz,
+        questions=questions,
+        source_quizzes=source_quizzes,
+        source_questions=source_questions,
+        teacher_classes=teacher_classes
+    )
 
 @app.route('/teacher/question/<int:question_id>/delete', methods=['POST'])
 @teacher_required
@@ -249,9 +369,157 @@ def delete_question(question_id):
         return redirect(url_for('teacher_dashboard'))
     
     db.session.delete(question)
+    db.session.flush()
+    normalize_question_order(quiz_id)
     db.session.commit()
     flash('Question deleted.')
     return redirect(url_for('edit_quiz', quiz_id=quiz_id))
+
+@app.route('/teacher/question/<int:question_id>/move', methods=['POST'])
+@teacher_required
+def move_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    quiz = question.quiz
+    if quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+
+    direction = request.form.get('direction', '').strip().lower()
+    questions = Question.query.filter_by(quiz_id=quiz.id).order_by(Question.order_num, Question.id).all()
+    index_map = {q.id: idx for idx, q in enumerate(questions)}
+    current_index = index_map[question.id]
+
+    if direction == 'up' and current_index > 0:
+        other = questions[current_index - 1]
+    elif direction == 'down' and current_index < len(questions) - 1:
+        other = questions[current_index + 1]
+    else:
+        return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+    question.order_num, other.order_num = other.order_num, question.order_num
+    normalize_question_order(quiz.id)
+    db.session.commit()
+    return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+@app.route('/teacher/quiz/<int:quiz_id>/settings', methods=['POST'])
+@teacher_required
+def update_quiz_settings(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    if quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+
+    max_attempts_raw = request.form.get('max_attempts', '').strip()
+    try:
+        points_first, points_second, points_third, points_fourth = parse_scoring_scheme(request.form)
+    except ValueError as exc:
+        flash(str(exc))
+        return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+    max_attempts = None
+    if max_attempts_raw:
+        try:
+            max_attempts = int(max_attempts_raw)
+        except ValueError:
+            flash('Maximum attempts must be a whole number.')
+            return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+        if max_attempts < 1:
+            flash('Maximum attempts must be at least 1.')
+            return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+    quiz.max_attempts = max_attempts
+    quiz.points_first_try = points_first
+    quiz.points_second_try = points_second
+    quiz.points_third_try = points_third
+    quiz.points_fourth_try = points_fourth
+    db.session.commit()
+    flash('Quiz settings updated.')
+    return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+@app.route('/teacher/quiz/<int:quiz_id>/question/copy', methods=['POST'])
+@teacher_required
+def copy_question_into_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    if quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+
+    source_question_id = request.form.get('source_question_id', type=int)
+    source_question = Question.query.get_or_404(source_question_id)
+    if source_question.quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+    if source_question.quiz_id == quiz.id:
+        flash('Select a question from a different quiz.')
+        return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+    new_question = Question(
+        quiz_id=quiz.id,
+        question_text=source_question.question_text,
+        option_a=source_question.option_a,
+        option_b=source_question.option_b,
+        option_c=source_question.option_c,
+        option_d=source_question.option_d,
+        correct_answer=source_question.correct_answer,
+        explanation=source_question.explanation,
+        order_num=Question.query.filter_by(quiz_id=quiz.id).count()
+    )
+    db.session.add(new_question)
+    db.session.commit()
+    flash('Question copied into quiz.')
+    return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+
+@app.route('/teacher/quiz/<int:quiz_id>/copy', methods=['POST'])
+@teacher_required
+def copy_quiz(quiz_id):
+    source_quiz = Quiz.query.get_or_404(quiz_id)
+    if source_quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+
+    target_class_id = request.form.get('target_class_id', type=int)
+    target_class = Class.query.get_or_404(target_class_id)
+    if target_class.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+
+    title_suffix = request.form.get('title_suffix', '').strip()
+    copied_title = source_quiz.title if not title_suffix else f'{source_quiz.title} {title_suffix}'
+
+    join_code = generate_code(6)
+    while Quiz.query.filter_by(join_code=join_code).first():
+        join_code = generate_code(6)
+
+    copied_quiz = Quiz(
+        title=copied_title,
+        join_code=join_code,
+        class_id=target_class.id,
+        max_attempts=source_quiz.max_attempts,
+        points_first_try=source_quiz.points_first_try,
+        points_second_try=source_quiz.points_second_try,
+        points_third_try=source_quiz.points_third_try,
+        points_fourth_try=source_quiz.points_fourth_try,
+    )
+    db.session.add(copied_quiz)
+    db.session.flush()
+
+    source_questions = Question.query.filter_by(quiz_id=source_quiz.id).order_by(Question.order_num).all()
+    for idx, src in enumerate(source_questions):
+        db.session.add(Question(
+            quiz_id=copied_quiz.id,
+            question_text=src.question_text,
+            option_a=src.option_a,
+            option_b=src.option_b,
+            option_c=src.option_c,
+            option_d=src.option_d,
+            correct_answer=src.correct_answer,
+            explanation=src.explanation,
+            order_num=idx
+        ))
+    db.session.commit()
+    flash(f'Copied quiz to {target_class.name}.')
+    return redirect(url_for('edit_quiz', quiz_id=copied_quiz.id))
 
 @app.route('/teacher/analytics')
 @teacher_required
@@ -293,7 +561,7 @@ def download_quiz_csv(quiz_id):
         row.extend([
             attempt.attempt_number,
             attempt.score,
-            len(quiz.questions) * 4,
+            len(quiz.questions) * quiz.max_points_per_question,
             attempt.started_at.isoformat(),
             attempt.completed_at.isoformat() if attempt.completed_at else '',
             duration if duration else ''
@@ -360,6 +628,59 @@ def download_class_csv(class_id):
         download_name=filename
     )
 
+@app.route('/teacher/analytics/class/<int:class_id>/scratch-events/csv')
+@teacher_required
+def download_class_scratch_events_csv(class_id):
+    class_obj = Class.query.get_or_404(class_id)
+    if class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('analytics_dashboard'))
+
+    anonymize = request.args.get('anonymize') == 'true'
+
+    output = StringIO()
+    writer = csv.writer(output)
+    headers = [
+        'event_id', 'class_id', 'class_name', 'quiz_id', 'quiz_title', 'attempt_id',
+        'student_id' if anonymize else 'student_name', 'question_id', 'question_text',
+        'scratch_order', 'scratched_option', 'is_correct', 'timestamp', 'time_since_question_start'
+    ]
+    writer.writerow([h for h in headers if h])
+
+    quiz_ids = [quiz.id for quiz in class_obj.quizzes]
+    if quiz_ids:
+        attempts = QuizAttempt.query.filter(QuizAttempt.quiz_id.in_(quiz_ids)).all()
+        for attempt in attempts:
+            for q_attempt in attempt.question_attempts:
+                for event in q_attempt.scratch_events:
+                    time_delta = (event.timestamp - q_attempt.started_at).total_seconds()
+                    row = [
+                        event.id,
+                        class_obj.id,
+                        class_obj.name,
+                        attempt.quiz_id,
+                        attempt.quiz.title,
+                        attempt.id,
+                        f'student_{attempt.student_id}' if anonymize else attempt.student.name,
+                        q_attempt.question_id,
+                        q_attempt.question.question_text[:50] + '...' if len(q_attempt.question.question_text) > 50 else q_attempt.question.question_text,
+                        event.scratch_order,
+                        event.scratched_option,
+                        event.is_correct,
+                        event.timestamp.isoformat(),
+                        time_delta
+                    ]
+                    writer.writerow(row)
+
+    output.seek(0)
+    filename = f'class_{class_id}_scratch_events_{"anonymized" if anonymize else "named"}.csv'
+    return send_file(
+        BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
+
 @app.route('/teacher/analytics/scratch-events/<int:quiz_id>/csv')
 @teacher_required
 def download_scratch_events_csv(quiz_id):
@@ -418,7 +739,31 @@ def student_dashboard():
         return redirect(url_for('teacher_dashboard'))
     
     enrollments = user.enrollments
-    return render_template('student/dashboard.html', enrollments=enrollments, user=user)
+    attempts = QuizAttempt.query.filter_by(student_id=user.id).all()
+    attempt_counts = {}
+    in_progress_attempt_ids = set()
+    latest_incomplete_attempt_by_quiz = {}
+    best_scores = {}
+    for attempt in attempts:
+        attempt_counts[attempt.quiz_id] = attempt_counts.get(attempt.quiz_id, 0) + 1
+        if not attempt.completed_at:
+            in_progress_attempt_ids.add(attempt.quiz_id)
+            existing = latest_incomplete_attempt_by_quiz.get(attempt.quiz_id)
+            if existing is None or attempt.started_at > existing.started_at:
+                latest_incomplete_attempt_by_quiz[attempt.quiz_id] = attempt
+        if attempt.completed_at:
+            previous_best = best_scores.get(attempt.quiz_id)
+            if previous_best is None or attempt.score > previous_best:
+                best_scores[attempt.quiz_id] = attempt.score
+    return render_template(
+        'student/dashboard.html',
+        enrollments=enrollments,
+        user=user,
+        attempt_counts=attempt_counts,
+        in_progress_attempt_ids=in_progress_attempt_ids,
+        latest_incomplete_attempt_by_quiz=latest_incomplete_attempt_by_quiz,
+        best_scores=best_scores
+    )
 
 @app.route('/student/join/class', methods=['GET', 'POST'])
 @login_required
@@ -456,26 +801,27 @@ def join_quiz():
             flash('Invalid quiz join code.')
             return redirect(url_for('join_quiz'))
         
-        user = User.query.get(session['user_id'])
-        # Check if student is enrolled in the class
-        if quiz.class_obj not in [e.class_obj for e in user.enrollments]:
-            flash('You must be enrolled in the class to access this quiz.')
-            return redirect(url_for('join_class'))
-        
-        # Create new attempt
-        attempt_count = QuizAttempt.query.filter_by(quiz_id=quiz.id, student_id=user.id).count()
-        new_attempt = QuizAttempt(
-            quiz_id=quiz.id,
-            student_id=user.id,
-            attempt_number=attempt_count + 1,
-            started_at=datetime.now(timezone.utc)
-        )
-        db.session.add(new_attempt)
-        db.session.commit()
-        
+        new_attempt, error = create_quiz_attempt(quiz, session['user_id'])
+        if error:
+            flash(error)
+            return redirect(url_for('student_dashboard'))
         return redirect(url_for('take_quiz', attempt_id=new_attempt.id))
     
     return render_template('student/join_quiz.html')
+
+@app.route('/student/quiz/<int:quiz_id>/start', methods=['POST'])
+@login_required
+def start_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    if session.get('is_teacher'):
+        flash('Student access required.')
+        return redirect(url_for('teacher_dashboard'))
+
+    new_attempt, error = create_quiz_attempt(quiz, session['user_id'])
+    if error:
+        flash(error)
+        return redirect(url_for('student_dashboard'))
+    return redirect(url_for('take_quiz', attempt_id=new_attempt.id))
 
 @app.route('/student/quiz/<int:attempt_id>')
 @login_required
@@ -559,9 +905,11 @@ def scratch():
     db.session.add(scratch_event)
     
     # Update question attempt
+    scoring_scheme = attempt.quiz.scoring_scheme
+
     if is_correct:
         q_attempt.is_complete = True
-        q_attempt.points_earned = 4 - scratch_count
+        q_attempt.points_earned = scoring_scheme[scratch_count]
         q_attempt.completed_at = datetime.now(timezone.utc)
         q_attempt.attempts_before_correct = scratch_count
     
@@ -579,7 +927,7 @@ def scratch():
     
     response = {
         'is_correct': is_correct,
-        'points_remaining': 4 - scratch_count if not is_correct else 4 - scratch_count,
+        'points_remaining': scoring_scheme[min(scratch_count + 1, 3)] if not is_correct else scoring_scheme[scratch_count],
         'explanation': question.explanation if is_correct else None,
         'scratch_count': scratch_count + 1
     }
@@ -618,7 +966,7 @@ def view_results(attempt_id):
     
     quiz = attempt.quiz
     questions = Question.query.filter_by(quiz_id=quiz.id).order_by(Question.order_num).all()
-    max_score = len(questions) * 4
+    max_score = len(questions) * quiz.max_points_per_question
     
     return render_template('student/results.html', attempt=attempt, quiz=quiz, 
                          questions=questions, max_score=max_score)
@@ -629,9 +977,11 @@ def view_results(attempt_id):
 def init_db():
     """Initialize the database"""
     db.create_all()
+    ensure_schema_updates()
     print('Database initialized.')
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        ensure_schema_updates()
     app.run(debug=True, host='0.0.0.0', port=5001)
