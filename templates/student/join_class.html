@@ -2,14 +2,54 @@
 
 {% block title %}Join Class{% endblock %}
 
+{% block extra_css %}
+<style>
+.join-container {
+    max-width: 500px;
+    margin: 40px auto;
+    padding: 30px;
+    border-radius: 12px;
+    border-left: 6px solid #0a5ea8;
+    background: #f0f7ff;
+    box-shadow: 0 2px 8px rgba(10, 94, 168, 0.15);
+}
+
+.join-container h1 {
+    color: #0a5ea8;
+    margin-bottom: 10px;
+}
+
+.join-subtitle {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.info-box {
+    background: #e7f3ff;
+    border: 1px solid #b3dcff;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.info-box strong {
+    color: #0a5ea8;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="form-container">
-    <h1>Join a Class</h1>
+<div class="join-container">
+    <h1>📚 Join a Class</h1>
+    <p class="join-subtitle">Enter a class code from your teacher to get enrolled</p>
     
     <form method="POST" class="standard-form">
         <div class="form-group">
             <label for="join_code">Class Join Code:</label>
-            <input type="text" id="join_code" name="join_code" required placeholder="Enter 6-character code" maxlength="6" style="text-transform: uppercase;">
+            <input type="text" id="join_code" name="join_code" required placeholder="E.g., ABC123" maxlength="6" style="text-transform: uppercase; font-size: 18px; letter-spacing: 2px;">
         </div>
         
         <div class="button-group">
@@ -19,7 +59,7 @@
     </form>
     
     <div class="info-box">
-        <p><strong>Note:</strong> You need a join code from your teacher to enroll in a class.</p>
+        <p><strong>What's a class code?</strong> Your teacher will provide this special code to enroll you in their class. Once you join, you can see all quizzes in that class.</p>
     </div>
 </div>
 {% endblock %}

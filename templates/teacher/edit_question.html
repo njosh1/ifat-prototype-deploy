@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Question{% endblock %}
+
+{% block content %}
+<div class="quiz-editor">
+    <h1>Edit Question</h1>
+    <p class="quiz-path">{{ quiz.title }} > Question {{ question.order_num + 1 }}</p>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('edit_quiz', quiz_id=quiz.id) }}" class="btn btn-secondary">Back to Quiz</a>
+    </div>
+    
+    <form method="POST" class="question-form">
+        <div class="form-group">
+            <label for="question_text">Question Text:</label>
+            <textarea id="question_text" name="question_text" rows="3" required>{{ question.question_text }}</textarea>
+        </div>
+        
+        <div class="options-grid">
+            <div class="form-group">
+                <label for="option_a">Option A:</label>
+                <input type="text" id="option_a" name="option_a" value="{{ question.option_a }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_b">Option B:</label>
+                <input type="text" id="option_b" name="option_b" value="{{ question.option_b }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_c">Option C:</label>
+                <input type="text" id="option_c" name="option_c" value="{{ question.option_c }}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="option_d">Option D:</label>
+                <input type="text" id="option_d" name="option_d" value="{{ question.option_d }}" required>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="correct_answer">Correct Answer:</label>
+            <select id="correct_answer" name="correct_answer" required>
+                <option value="A" {% if question.correct_answer == 'A' %}selected{% endif %}>A</option>
+                <option value="B" {% if question.correct_answer == 'B' %}selected{% endif %}>B</option>
+                <option value="C" {% if question.correct_answer == 'C' %}selected{% endif %}>C</option>
+                <option value="D" {% if question.correct_answer == 'D' %}selected{% endif %}>D</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="explanation">Explanation (shown after correct answer):</label>
+            <textarea id="explanation" name="explanation" rows="3" required>{{ question.explanation }}</textarea>
+        </div>
+        
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('edit_quiz', quiz_id=quiz.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

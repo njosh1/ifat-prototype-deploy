@@ -1,6 +1,7 @@
 import os
 import secrets
 import string
+import random
 from datetime import datetime, timezone
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
@@ -374,6 +375,47 @@ def delete_question(question_id):
     db.session.commit()
     flash('Question deleted.')
     return redirect(url_for('edit_quiz', quiz_id=quiz_id))
+
+@app.route('/teacher/question/<int:question_id>/edit', methods=['GET', 'POST'])
+@teacher_required
+def edit_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    quiz = question.quiz
+    
+    if quiz.class_obj.teacher_id != session['user_id']:
+        flash('Access denied.')
+        return redirect(url_for('teacher_dashboard'))
+    
+    if request.method == 'POST':
+        question_text = request.form.get('question_text', '').strip()
+        option_a = request.form.get('option_a', '').strip()
+        option_b = request.form.get('option_b', '').strip()
+        option_c = request.form.get('option_c', '').strip()
+        option_d = request.form.get('option_d', '').strip()
+        correct_answer = request.form.get('correct_answer', '').strip().upper()
+        explanation = request.form.get('explanation', '').strip()
+        
+        if not all([question_text, option_a, option_b, option_c, option_d, correct_answer, explanation]):
+            flash('All fields are required.')
+            return redirect(url_for('edit_question', question_id=question_id))
+        
+        if correct_answer not in ['A', 'B', 'C', 'D']:
+            flash('Correct answer must be A, B, C, or D.')
+            return redirect(url_for('edit_question', question_id=question_id))
+        
+        question.question_text = question_text
+        question.option_a = option_a
+        question.option_b = option_b
+        question.option_c = option_c
+        question.option_d = option_d
+        question.correct_answer = correct_answer
+        question.explanation = explanation
+        db.session.commit()
+        
+        flash('Question updated successfully!')
+        return redirect(url_for('edit_quiz', quiz_id=quiz.id))
+    
+    return render_template('teacher/edit_question.html', question=question, quiz=quiz)
 
 @app.route('/teacher/question/<int:question_id>/move', methods=['POST'])
 @teacher_required
@@ -913,6 +955,9 @@ def scratch():
         q_attempt.completed_at = datetime.now(timezone.utc)
         q_attempt.attempts_before_correct = scratch_count
     
+    # Track last activity
+    attempt.last_activity_at = datetime.now(timezone.utc)
+    
     db.session.commit()
     
     # Calculate time to first scratch and time to correct
@@ -950,6 +995,35 @@ def scratch():
         response['quiz_complete'] = True
     
     return jsonify(response)
+
+@app.route('/api/quiz-attempt/<int:attempt_id>/state', methods=['GET'])
+@login_required
+def get_quiz_attempt_state(attempt_id):
+    """Get the current state of a quiz attempt (used to restore state on page reload)"""
+    attempt = QuizAttempt.query.get_or_404(attempt_id)
+    if attempt.student_id != session['user_id']:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    attempt_data = {
+        'attempt_id': attempt.id,
+        'quiz_complete': attempt.completed_at is not None,
+        'questions': {}
+    }
+    
+    for q_attempt in attempt.question_attempts:
+        attempt_data['questions'][str(q_attempt.question_id)] = {
+            'is_complete': q_attempt.is_complete,
+            'scratches': [
+                {
+                    'option': event.scratched_option,
+                    'is_correct': event.is_correct
+                }
+                for event in q_attempt.scratch_events
+            ],
+            'points_remaining': q_attempt.question.quiz.scoring_scheme[len(q_attempt.scratch_events)] if len(q_attempt.scratch_events) < 4 else 0
+        }
+    
+    return jsonify(attempt_data)
 
 @app.route('/student/results/<int:attempt_id>')
 @login_required

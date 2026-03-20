@@ -232,6 +232,12 @@
 
 {% block content %}
 <div class="quiz-taking">
+    <!-- Navigation bar -->
+    <div style="margin-bottom: 20px; padding: 12px; background: #f0f0f0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <div></div>
+        <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary" onclick="return confirm('Are you sure you want to leave? Your progress will be saved.');">← Back to Dashboard</a>
+    </div>
+
     <div class="quiz-header">
         <h1>{{ quiz.title }}</h1>
         <p>Attempt #{{ attempt.attempt_number }}</p>
@@ -318,6 +324,66 @@ document.querySelectorAll('.question-card').forEach(card => {
         completed: false
     };
 });
+
+// Load current state from server (for page reloads)
+async function loadQuizState() {
+    try {
+        const response = await fetch(`/api/quiz-attempt/${attemptId}/state`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        // Restore state for each question
+        for (const [questionId, state] of Object.entries(data.questions)) {
+            questionStates[questionId] = {
+                scratches: state.scratches.length,
+                pointsRemaining: state.points_remaining,
+                completed: state.is_complete
+            };
+            
+            // Restore scratch cards UI
+            for (const scratch of state.scratches) {
+                const scratchCard = document.querySelector(`.scratch-card[data-question="${questionId}"][data-option="${scratch.option}"]`);
+                if (scratchCard) {
+                    scratchCard.classList.add('scratched');
+                    const overlay = scratchCard.querySelector('.scratch-overlay');
+                    overlay.style.display = 'none';
+                    
+                    const revealed = document.createElement('div');
+                    revealed.className = 'scratch-revealed ' + (scratch.is_correct ? 'scratch-correct' : 'scratch-incorrect');
+                    revealed.textContent = scratch.is_correct ? '✓' : '✗';
+                    scratchCard.appendChild(revealed);
+                }
+            }
+            
+            // Update points display
+            document.getElementById('points-' + questionId).textContent = 
+                state.points_remaining + ' points';
+            
+            // Mark question as complete and show explanation
+            if (state.is_complete) {
+                const questionCard = document.getElementById('question-' + questionId);
+                questionCard.classList.add('completed');
+                document.getElementById('explanation-' + questionId).classList.add('show');
+                
+                // Disable other scratches for this question
+                document.querySelectorAll(`.scratch-card[data-question="${questionId}"]`).forEach(c => {
+                    c.style.cursor = 'not-allowed';
+                });
+            }
+        }
+        
+        // Show quiz complete if applicable
+        if (data.quiz_complete) {
+            document.getElementById('quiz-complete').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading quiz state:', error);
+    }
+}
+
+// Load state on page load
+window.addEventListener('DOMContentLoaded', loadQuizState);
 
 // Handle scratch clicks
 document.querySelectorAll('.scratch-card').forEach(card => {

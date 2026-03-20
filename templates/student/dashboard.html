@@ -64,8 +64,8 @@
     <h2>Recent Quiz Attempts</h2>
     {% set recent_attempts = user.quiz_attempts|sort(attribute='started_at', reverse=True) %}
     {% if recent_attempts %}
-        <div class="attempts-list">
-            {% for attempt in recent_attempts[:5] %}
+        <div class="attempts-list" id="attempts-container">
+            {% for attempt in recent_attempts %}
                 <div class="attempt-card">
                     <h3>{{ attempt.quiz.title }}</h3>
                     <p>Class: {{ attempt.quiz.class_obj.name }}</p>

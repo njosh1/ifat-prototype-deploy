@@ -51,6 +51,8 @@ class Quiz(db.Model):
     points_second_try = db.Column(db.Integer, default=3, nullable=False)
     points_third_try = db.Column(db.Integer, default=2, nullable=False)
     points_fourth_try = db.Column(db.Integer, default=1, nullable=False)
+    randomize_questions = db.Column(db.Boolean, default=False, nullable=False)
+    randomize_answers = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
@@ -99,6 +101,7 @@ class QuizAttempt(db.Model):
     score = db.Column(db.Integer, default=0)
     started_at = db.Column(db.DateTime, nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
+    last_activity_at = db.Column(db.DateTime, nullable=True)
     
     # Relationships
     question_attempts = db.relationship('QuestionAttempt', backref='quiz_attempt', lazy=True, cascade='all, delete-orphan')

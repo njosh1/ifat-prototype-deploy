@@ -2,14 +2,54 @@
 
 {% block title %}Take Quiz{% endblock %}
 
+{% block extra_css %}
+<style>
+.join-container {
+    max-width: 500px;
+    margin: 40px auto;
+    padding: 30px;
+    border-radius: 12px;
+    border-left: 6px solid #238a4a;
+    background: #f0fdf4;
+    box-shadow: 0 2px 8px rgba(35, 138, 74, 0.15);
+}
+
+.join-container h1 {
+    color: #238a4a;
+    margin-bottom: 10px;
+}
+
+.join-subtitle {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+.info-box {
+    background: #dcf8e3;
+    border: 1px solid #a3e9b5;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.info-box strong {
+    color: #238a4a;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="form-container">
-    <h1>Take a Quiz</h1>
+<div class="join-container">
+    <h1>🎯 Take a Quiz</h1>
+    <p class="join-subtitle">Enter a quiz code to start your attempt</p>
     
     <form method="POST" class="standard-form">
         <div class="form-group">
             <label for="join_code">Quiz Join Code:</label>
-            <input type="text" id="join_code" name="join_code" required placeholder="Enter 6-character code" maxlength="6" style="text-transform: uppercase;">
+            <input type="text" id="join_code" name="join_code" required placeholder="E.g., XYZ789" maxlength="6" style="text-transform: uppercase; font-size: 18px; letter-spacing: 2px;">
         </div>
         
         <div class="button-group">
@@ -19,8 +59,8 @@
     </form>
     
     <div class="info-box">
-        <p><strong>Note:</strong> You need a quiz join code from your teacher. You must be enrolled in the class to take the quiz.</p>
-        <p><strong>Retakes:</strong> After your first code-based entry, you can start retakes directly from your dashboard quiz list.</p>
+        <p><strong>What's a quiz code?</strong> Your teacher will provide this special code to start a new quiz attempt. This is <strong>different</strong> from the class code!</p>
+        <p style="margin-top: 8px; font-size: 13px;">💡 <strong>Tip:</strong> You must be enrolled in the class first. Check the "Join a Class" option if you don't see your class yet.</p>
     </div>
 </div>
 {% endblock %}
