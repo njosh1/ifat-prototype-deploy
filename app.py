@@ -35,22 +35,31 @@ def ensure_schema_updates():
     """Best-effort schema patching for environments without migrations."""
     inspector = inspect(db.engine)
     quiz_columns = {col['name'] for col in inspector.get_columns('quizzes')}
-    updates = []
+    quiz_updates = []
 
     if 'max_attempts' not in quiz_columns:
-        updates.append("ALTER TABLE quizzes ADD COLUMN max_attempts INTEGER")
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN max_attempts INTEGER")
     if 'points_first_try' not in quiz_columns:
-        updates.append("ALTER TABLE quizzes ADD COLUMN points_first_try INTEGER NOT NULL DEFAULT 4")
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN points_first_try INTEGER NOT NULL DEFAULT 4")
     if 'points_second_try' not in quiz_columns:
-        updates.append("ALTER TABLE quizzes ADD COLUMN points_second_try INTEGER NOT NULL DEFAULT 3")
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN points_second_try INTEGER NOT NULL DEFAULT 3")
     if 'points_third_try' not in quiz_columns:
-        updates.append("ALTER TABLE quizzes ADD COLUMN points_third_try INTEGER NOT NULL DEFAULT 2")
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN points_third_try INTEGER NOT NULL DEFAULT 2")
     if 'points_fourth_try' not in quiz_columns:
-        updates.append("ALTER TABLE quizzes ADD COLUMN points_fourth_try INTEGER NOT NULL DEFAULT 1")
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN points_fourth_try INTEGER NOT NULL DEFAULT 1")
+    if 'randomize_questions' not in quiz_columns:
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN randomize_questions BOOLEAN NOT NULL DEFAULT 0")
+    if 'randomize_answers' not in quiz_columns:
+        quiz_updates.append("ALTER TABLE quizzes ADD COLUMN randomize_answers BOOLEAN NOT NULL DEFAULT 0")
 
-    for stmt in updates:
+    attempt_columns = {col['name'] for col in inspector.get_columns('quiz_attempts')}
+    attempt_updates = []
+    if 'last_activity_at' not in attempt_columns:
+        attempt_updates.append("ALTER TABLE quiz_attempts ADD COLUMN last_activity_at DATETIME")
+
+    for stmt in quiz_updates + attempt_updates:
         db.session.execute(text(stmt))
-    if updates:
+    if quiz_updates or attempt_updates:
         db.session.commit()
 
 def parse_scoring_scheme(form_data):
